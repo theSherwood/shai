@@ -1,0 +1,46 @@
+type: shai-sandbox
+version: 1
+image: ghcr.io/divisive-ai/dev:latest
+user: devuser
+workspace: /src
+resources:
+  global:
+    vars:
+      - source: XYZ
+        target: AXYZ # only needs to be defined if different.
+      - source: OPENAI_API_KEY
+        target: SPECIAL_OPENAI_API_KEY # only needs to be defined if different.
+    mounts:
+      - source: ${{ env.HOME }}/.ssh
+        target: /home/devuser/.ssh
+        mode: rw
+      - source: ${{ env.HOME }}/.gnupg
+        target: /home/devuser/.gnupg
+    calls: # exposed inside the container through the MCP call server
+      - name: git-sync
+        command: git pull --rebase
+      - name: cache-rm
+        description: Pull remote repo with rebase. Supports --key arguments only
+        command: ops/cache_rm.sh
+        allowed-args: ^(--key=[a-z0-9_-]+)$
+    http: # these list servers that are allowed to be accessed via http and https
+      - googleapis.com
+      - generativelanguage.googleapis.com
+      - ai.google.dev
+      - oauth2.googleapis.com
+      - accounts.google.com
+    ports: # other network holes to make
+      - host: github.com
+        port: 443
+  dir1:
+    vars:
+      - source: OPENAI_API_KEY
+        target: ${{ env.OPENAI_API_KEY }}
+apply:
+  - path: ./
+    resources:
+      - global
+  - path: ./dir1
+    resources:
+      - dir1
+    image: ghcr.io/divisive-ai/dev:dir1
