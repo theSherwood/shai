@@ -2,14 +2,10 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
-  workflow_call:
-    inputs:
-      tag:
-        description: 'Git tag to release (e.g., v0.0.1)'
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -17,13 +13,54 @@ permissions:
   id-token: write # for npm oidc trusted packages
 
 jobs:
+  # Step 1: Wait for tests (only when triggered by main push)
+  wait-for-tests:
+    if: github.ref_type == 'branch' && github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for test workflow to complete
+        uses: lewagon/wait-on-check-action@v1.4.1
+        with:
+          ref: ${{ github.sha }}
+          check-name: 'test'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+
+  # Step 2: Create tag (only when triggered by main push, after tests pass)
+  create-tag:
+    needs: wait-for-tests
+    if: github.ref_type == 'branch' && github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag_version.outputs.new_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump version and push tag
+        id: tag_version
+        uses: anothrNick/github-tag-action@1.71.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BUMP: patch
+          WITH_V: true
+          PRERELEASE: false
+          RELEASE_BRANCHES: main
+
+  # Step 3: Run GoReleaser (for both main push after tag creation, and manual tag pushes)
   goreleaser:
+    needs: [create-tag]
+    if: |
+      always() &&
+      (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.create-tag.outputs.tag || github.ref }}
           fetch-depth: 0
 
       - name: Set up Node
