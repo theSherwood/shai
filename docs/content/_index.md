@@ -18,6 +18,47 @@ layout: hextra-home
   }
 </style>
 
+<style>
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .hero-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+  .video-container-wrapper {
+    margin-top: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .video-container {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
+  }
+}
+.video-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+.video-container iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+</style>
+
+<div class="hero-grid">
+<div>
+
 {{< hextra/hero-badge >}}
   <div class="hx:w-2 hx:h-2 hx:rounded-full hx:bg-primary-400"></div>
   <span>Free and open source</span>
@@ -36,16 +77,28 @@ layout: hextra-home
 {{< /hextra/hero-subtitle >}}
 </div>
 
-
-
-  ```bash {linenos=false}
-  npm install -g @colony2/shai     
-  ```
-
+```bash {linenos=false}
+npm install -g @colony2/shai
+```
 
 <div class="hx:mb-6 hx:mt-6">
 {{< hextra/hero-button text="Get Started" link="docs/quick-start" >}}
 {{< hextra/hero-button text="View on GitHub" link="https://github.com/colony-2/shai" >}}
+</div>
+
+</div>
+<div class="video-container-wrapper" style="margin-top: 1.5rem;">
+
+<div class="video-container">
+<iframe
+  src="https://www.youtube.com/embed/9vdKrZoFQHo?autoplay=1&mute=1&loop=1&playlist=9vdKrZoFQHo"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  allowfullscreen>
+</iframe>
+</div>
+
+</div>
 </div>
 
 <div class="hx:mt-6"></div>
