@@ -30,6 +30,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	networktypes "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/term"
@@ -457,6 +458,31 @@ func (r *EphemeralRunner) buildDockerConfigs(useTTY bool, containerName string) 
 		env = append(env, fmt.Sprintf("DEV_GID=%s", strings.TrimSpace(r.hostGID)))
 	}
 
+	// Collect exposed ports and build port bindings
+	exposedPorts := collectExposedPorts(r.resources)
+	var portSet nat.PortSet
+	var portBindings nat.PortMap
+	if len(exposedPorts) > 0 {
+		portSet = make(nat.PortSet)
+		portBindings = make(nat.PortMap)
+		for _, exp := range exposedPorts {
+			// Create the container port spec (e.g., "8000/tcp")
+			containerPort, err := nat.NewPort(exp.Protocol, strconv.Itoa(exp.Container))
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid container port %d/%s: %w", exp.Container, exp.Protocol, err)
+			}
+			// Mark the port as exposed in the container
+			portSet[containerPort] = struct{}{}
+			// Bind the host port to the container port
+			portBindings[containerPort] = []nat.PortBinding{
+				{
+					HostIP:   "0.0.0.0",
+					HostPort: strconv.Itoa(exp.Host),
+				},
+			}
+		}
+	}
+
 	cfg := &container.Config{
 		Image:        r.image,
 		Hostname:     containerName,
@@ -470,6 +496,7 @@ func (r *EphemeralRunner) buildDockerConfigs(useTTY bool, containerName string) 
 		AttachStderr: true,
 		OpenStdin:    true,
 		Env:          env,
+		ExposedPorts: portSet,
 	}
 
 	mounts := r.mountBuilder.BuildMounts()
@@ -489,11 +516,12 @@ func (r *EphemeralRunner) buildDockerConfigs(useTTY bool, containerName string) 
 	privileged := r.config.Privileged || r.hasPrivilegedResource()
 
 	hostCfg := &container.HostConfig{
-		AutoRemove: true,
-		Mounts:     mounts,
-		ExtraHosts: []string{fmt.Sprintf("%s:host-gateway", r.dockerHostAddr)},
-		CapAdd:     []string{"NET_ADMIN"},
-		Privileged: privileged,
+		AutoRemove:   true,
+		Mounts:       mounts,
+		ExtraHosts:   []string{fmt.Sprintf("%s:host-gateway", r.dockerHostAddr)},
+		CapAdd:       []string{"NET_ADMIN"},
+		Privileged:   privileged,
+		PortBindings: portBindings,
 	}
 	return cfg, hostCfg, nil
 }
@@ -518,6 +546,7 @@ func (r *EphemeralRunner) buildBootstrapArgs() ([]string, error) {
 	httpList := uniqueHTTPHosts(r.resources)
 	portList := uniquePortEntries(r.resources)
 	rootCommands := collectRootCommands(r.resources)
+	exposedPorts := collectExposedPorts(r.resources)
 
 	targetUser := r.shaiConfig.User
 	if r.config.UserOverride != "" {
@@ -565,6 +594,12 @@ func (r *EphemeralRunner) buildBootstrapArgs() ([]string, error) {
 
 	for _, cmd := range rootCommands {
 		args = append(args, "--root-cmd", cmd)
+	}
+
+	// Pass exposed ports in format "host:container/protocol"
+	for _, exp := range exposedPorts {
+		portSpec := fmt.Sprintf("%d:%d/%s", exp.Host, exp.Container, exp.Protocol)
+		args = append(args, "--expose", portSpec)
 	}
 
 	if r.config.Verbose {
@@ -907,6 +942,27 @@ func collectRootCommands(resources []*configpkg.ResolvedResource) []string {
 		}
 	}
 	return commands
+}
+
+// collectExposedPorts gathers all exposed port definitions from the given resources.
+func collectExposedPorts(resources []*configpkg.ResolvedResource) []configpkg.ExposedPort {
+	// Track seen ports by host:protocol to avoid duplicates
+	seen := make(map[string]bool)
+	var ports []configpkg.ExposedPort
+	for _, res := range resources {
+		if res == nil || res.Spec == nil {
+			continue
+		}
+		for _, exp := range res.Spec.Expose {
+			key := fmt.Sprintf("%d/%s", exp.Host, exp.Protocol)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			ports = append(ports, exp)
+		}
+	}
+	return ports
 }
 
 func (r *EphemeralRunner) ensureBootstrapScript() error {

@@ -6,3 +6,5 @@ bin/shai
 /docs/public/
 /docs/resources/_gen/
 /docs/.hugo_build.lock
+
+.claude

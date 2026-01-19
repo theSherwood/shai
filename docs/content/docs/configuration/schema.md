@@ -343,6 +343,89 @@ resources:
 
 ---
 
+### `expose`
+
+**Type:** List of port mappings
+
+Exposes container ports to the host machine via Docker's `--publish` flag. Use this to make servers running inside the container accessible from your host.
+
+**Fields (object format):**
+- `host`: Port number on the host (required, 1-65535)
+- `container`: Port number in the container (optional, defaults to `host`)
+- `protocol`: `tcp` or `udp` (optional, defaults to `tcp`)
+
+**Simple format:**
+```yaml
+expose:
+  - 8000        # Equivalent to {host: 8000, container: 8000, protocol: "tcp"}
+```
+
+**Object format:**
+```yaml
+expose:
+  - host: 8080
+    container: 3000
+    protocol: tcp
+```
+
+**Example: Basic HTTP Server**
+```yaml
+resources:
+  web-server:
+    expose:
+      - 8000    # Access your dev server at localhost:8000
+```
+
+**Example: Multiple Ports (Web + API)**
+```yaml
+resources:
+  full-stack:
+    expose:
+      - 3000    # Frontend dev server
+      - 8080    # API server
+      - host: 5173
+        container: 5173    # Vite HMR
+```
+
+**Example: Different Host/Container Ports**
+```yaml
+resources:
+  api-server:
+    expose:
+      - host: 80           # Access at localhost:80
+        container: 3000    # App listens on 3000 inside container
+```
+
+**Example: UDP Protocol**
+```yaml
+resources:
+  game-server:
+    expose:
+      - host: 27015
+        container: 27015
+        protocol: udp
+```
+
+**Behavior:**
+- Ports are exposed when the resource set is activated
+- Same host port cannot be mapped twice (within same protocol)
+- Same port with different protocols (tcp/udp) is allowed
+- Exposed ports are displayed during sandbox bootstrap
+- Visible in both verbose and non-verbose modes
+
+**Display during bootstrap:**
+```
+Exposed Ports:
+  localhost:8000 (tcp) → container:8000
+  localhost:3000 (tcp) → container:3000
+```
+
+{{< callout type="info" >}}
+**`expose` vs `ports`:** The `expose` field publishes container ports to the host (inbound connections). The `ports` field allows outbound connections to specific hosts (network sandboxing).
+{{< /callout >}}
+
+---
+
 ### `root-commands`
 
 **Type:** List of shell commands
@@ -600,6 +683,12 @@ resources:
     ports:
       - host: <hostname>
         port: <port-number>
+
+    expose:
+      - <port>                           # Simple: same host/container port, tcp
+      - host: <host-port>
+        container: <container-port>
+        protocol: tcp|udp
 
     root-commands:
       - <command>
