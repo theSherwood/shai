@@ -249,3 +249,159 @@ apply:
 	require.NotNil(t, cfg)
 	assert.Equal(t, "dev", cfg.User)
 }
+
+func TestExposedPortSimpleFormat(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: example
+resources:
+  web:
+    expose:
+      - 8000
+      - 3000
+apply:
+  - path: ./
+    resources: [web]
+`)
+
+	cfg, err := Load(path, map[string]string{}, map[string]string{})
+	require.NoError(t, err)
+
+	res := cfg.Resources["web"]
+	require.NotNil(t, res)
+	require.Len(t, res.Expose, 2)
+
+	assert.Equal(t, 8000, res.Expose[0].Host)
+	assert.Equal(t, 8000, res.Expose[0].Container)
+	assert.Equal(t, "tcp", res.Expose[0].Protocol)
+
+	assert.Equal(t, 3000, res.Expose[1].Host)
+	assert.Equal(t, 3000, res.Expose[1].Container)
+	assert.Equal(t, "tcp", res.Expose[1].Protocol)
+}
+
+func TestExposedPortObjectFormat(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: example
+resources:
+  web:
+    expose:
+      - host: 8080
+        container: 3000
+        protocol: tcp
+      - host: 5353
+        container: 53
+        protocol: udp
+apply:
+  - path: ./
+    resources: [web]
+`)
+
+	cfg, err := Load(path, map[string]string{}, map[string]string{})
+	require.NoError(t, err)
+
+	res := cfg.Resources["web"]
+	require.NotNil(t, res)
+	require.Len(t, res.Expose, 2)
+
+	assert.Equal(t, 8080, res.Expose[0].Host)
+	assert.Equal(t, 3000, res.Expose[0].Container)
+	assert.Equal(t, "tcp", res.Expose[0].Protocol)
+
+	assert.Equal(t, 5353, res.Expose[1].Host)
+	assert.Equal(t, 53, res.Expose[1].Container)
+	assert.Equal(t, "udp", res.Expose[1].Protocol)
+}
+
+func TestExposedPortObjectDefaultsContainerToHost(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: example
+resources:
+  web:
+    expose:
+      - host: 8080
+apply:
+  - path: ./
+    resources: [web]
+`)
+
+	cfg, err := Load(path, map[string]string{}, map[string]string{})
+	require.NoError(t, err)
+
+	res := cfg.Resources["web"]
+	require.NotNil(t, res)
+	require.Len(t, res.Expose, 1)
+
+	assert.Equal(t, 8080, res.Expose[0].Host)
+	assert.Equal(t, 8080, res.Expose[0].Container)
+	assert.Equal(t, "tcp", res.Expose[0].Protocol)
+}
+
+func TestExposedPortInvalidPortNumber(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: example
+resources:
+  web:
+    expose:
+      - 70000
+apply:
+  - path: ./
+    resources: [web]
+`)
+
+	_, err := Load(path, map[string]string{}, map[string]string{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid host port 70000")
+}
+
+func TestExposedPortInvalidProtocol(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: example
+resources:
+  web:
+    expose:
+      - host: 8080
+        protocol: http
+apply:
+  - path: ./
+    resources: [web]
+`)
+
+	_, err := Load(path, map[string]string{}, map[string]string{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid protocol")
+}
+
+func TestExposedPortZeroPort(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: example
+resources:
+  web:
+    expose:
+      - 0
+apply:
+  - path: ./
+    resources: [web]
+`)
+
+	_, err := Load(path, map[string]string{}, map[string]string{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid host port 0")
+}

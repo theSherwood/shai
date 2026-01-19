@@ -38,6 +38,7 @@ type ResourceSet struct {
 	Calls        []Call          `yaml:"calls"`
 	HTTP         []string        `yaml:"http"`
 	Ports        []Port          `yaml:"ports"`
+	Expose       []ExposedPort   `yaml:"expose"`
 	RootCommands []string        `yaml:"root-commands"`
 	Options      ResourceOptions `yaml:"options"`
 }
@@ -79,6 +80,58 @@ func (c Call) AllowedArgsRegexp() *regexp.Regexp {
 type Port struct {
 	Host string `yaml:"host"`
 	Port int    `yaml:"port"`
+}
+
+// ExposedPort defines a port mapping from host to container.
+// Supports two YAML formats:
+//   - Simple: 8000 (maps host:8000 to container:8000, protocol tcp)
+//   - Object: {host: 8080, container: 3000, protocol: "udp"}
+type ExposedPort struct {
+	Host      int    `yaml:"host"`
+	Container int    `yaml:"container"`
+	Protocol  string `yaml:"protocol"`
+}
+
+// UnmarshalYAML implements custom unmarshaling to support both int and object formats.
+func (e *ExposedPort) UnmarshalYAML(node *yaml.Node) error {
+	// Try simple integer format first
+	if node.Kind == yaml.ScalarNode {
+		var port int
+		if err := node.Decode(&port); err != nil {
+			return fmt.Errorf("invalid port number: %w", err)
+		}
+		e.Host = port
+		e.Container = port
+		e.Protocol = "tcp"
+		return nil
+	}
+
+	// Try object format
+	if node.Kind == yaml.MappingNode {
+		type rawExposedPort struct {
+			Host      int    `yaml:"host"`
+			Container int    `yaml:"container"`
+			Protocol  string `yaml:"protocol"`
+		}
+		var raw rawExposedPort
+		if err := node.Decode(&raw); err != nil {
+			return fmt.Errorf("invalid port mapping: %w", err)
+		}
+		e.Host = raw.Host
+		e.Container = raw.Container
+		e.Protocol = raw.Protocol
+		// Default container to host if not specified
+		if e.Container == 0 && e.Host != 0 {
+			e.Container = e.Host
+		}
+		// Default protocol to tcp if not specified
+		if e.Protocol == "" {
+			e.Protocol = "tcp"
+		}
+		return nil
+	}
+
+	return fmt.Errorf("port must be an integer or object, got %v", node.Kind)
 }
 
 // ApplyRule maps a workspace path to resource set names.
@@ -233,6 +286,19 @@ func (c *Config) validate() error {
 				}
 				res.Calls[i].allowedRx = rx
 			}
+		}
+		for i, exp := range res.Expose {
+			if exp.Host < 1 || exp.Host > 65535 {
+				return fmt.Errorf("resource %s expose[%d] has invalid host port %d (must be 1-65535)", name, i, exp.Host)
+			}
+			if exp.Container < 1 || exp.Container > 65535 {
+				return fmt.Errorf("resource %s expose[%d] has invalid container port %d (must be 1-65535)", name, i, exp.Container)
+			}
+			protocol := strings.ToLower(strings.TrimSpace(exp.Protocol))
+			if protocol != "tcp" && protocol != "udp" {
+				return fmt.Errorf("resource %s expose[%d] has invalid protocol %q (must be tcp or udp)", name, i, exp.Protocol)
+			}
+			res.Expose[i].Protocol = protocol
 		}
 	}
 	if len(c.Apply) == 0 {
