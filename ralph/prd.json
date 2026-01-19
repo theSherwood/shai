@@ -17,8 +17,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented as 'expose' field to avoid conflict with existing 'ports' field (network sandboxing). Uses ExposedPort type with custom YAML unmarshaling."
     },
     {
       "id": "US-002",
@@ -32,8 +32,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added port conflict detection within resources and across resources for same path. Same port with different protocols (tcp/udp) is allowed."
     },
     {
       "id": "US-003",
@@ -47,8 +47,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added nat package for Docker port types. buildDockerConfigs() now sets ExposedPorts and PortBindings. collectExposedPorts() gathers ports from resources."
     },
     {
       "id": "US-004",
@@ -63,8 +63,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Exposed ports passed to bootstrap script via --expose flag. Bootstrap displays ports in 'Exposed Ports:' section after summary message, before shell exec."
     },
     {
       "id": "US-005",

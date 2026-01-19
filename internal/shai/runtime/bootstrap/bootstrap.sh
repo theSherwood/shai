@@ -214,6 +214,7 @@ declare -a HTTP_ALLOW=()
 declare -a PORT_ALLOW=()
 declare -a RESOURCE_NAMES=()
 declare -a ROOT_CMDS=()
+declare -a EXPOSE_PORTS=()
 
 require_arg() {
   if [ $# -lt 2 ]; then
@@ -276,6 +277,11 @@ while [ $# -gt 0 ]; do
     --root-cmd)
       require_arg "$@"
       ROOT_CMDS+=("$2")
+      shift 2
+      ;;
+    --expose)
+      require_arg "$@"
+      EXPOSE_PORTS+=("$2")
       shift 2
       ;;
     --verbose)
@@ -956,6 +962,20 @@ EOF
   summary_message="Shai sandbox started using [$image_desc] as user [$TARGET_USER]. Resource sets: [$resource_summary]"
 
   printf '%s\n' "$summary_message"
+
+  # Display exposed ports (visible in both verbose and non-verbose modes)
+  if [ ${#EXPOSE_PORTS[@]} -gt 0 ]; then
+    printf '\nExposed Ports:\n'
+    for port_spec in "${EXPOSE_PORTS[@]}"; do
+      # Format: host:container/protocol (e.g., "8000:8080/tcp")
+      host_port=${port_spec%%:*}
+      rest=${port_spec#*:}
+      container_port=${rest%%/*}
+      protocol=${rest##*/}
+      printf '  localhost:%s (%s) → container:%s\n' "$host_port" "$protocol" "$container_port"
+    done
+    printf '\n'
+  fi
 
   if [ "$IS_ROOT" -eq 1 ]; then
     if ! command -v runuser >/dev/null 2>&1; then

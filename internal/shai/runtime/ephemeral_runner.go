@@ -546,6 +546,7 @@ func (r *EphemeralRunner) buildBootstrapArgs() ([]string, error) {
 	httpList := uniqueHTTPHosts(r.resources)
 	portList := uniquePortEntries(r.resources)
 	rootCommands := collectRootCommands(r.resources)
+	exposedPorts := collectExposedPorts(r.resources)
 
 	targetUser := r.shaiConfig.User
 	if r.config.UserOverride != "" {
@@ -593,6 +594,12 @@ func (r *EphemeralRunner) buildBootstrapArgs() ([]string, error) {
 
 	for _, cmd := range rootCommands {
 		args = append(args, "--root-cmd", cmd)
+	}
+
+	// Pass exposed ports in format "host:container/protocol"
+	for _, exp := range exposedPorts {
+		portSpec := fmt.Sprintf("%d:%d/%s", exp.Host, exp.Container, exp.Protocol)
+		args = append(args, "--expose", portSpec)
 	}
 
 	if r.config.Verbose {

@@ -87,6 +87,35 @@ func TestBuildBootstrapArgsMissingEnvFails(t *testing.T) {
 	require.Contains(t, err.Error(), "host env \"MISSING\" not set")
 }
 
+func TestBuildBootstrapArgsIncludesExposedPorts(t *testing.T) {
+	runner := &EphemeralRunner{
+		shaiConfig: &configpkg.Config{
+			User:      "shai",
+			Workspace: "/src",
+		},
+		resources: []*configpkg.ResolvedResource{
+			{
+				Name: "web",
+				Spec: &configpkg.ResourceSet{
+					Expose: []configpkg.ExposedPort{
+						{Host: 8000, Container: 8000, Protocol: "tcp"},
+						{Host: 9000, Container: 9090, Protocol: "udp"},
+					},
+				},
+			},
+		},
+		hostEnv: map[string]string{},
+	}
+
+	args, err := runner.buildBootstrapArgs()
+	require.NoError(t, err)
+
+	// Verify --expose flags are present with correct format
+	require.Contains(t, args, "--expose")
+	require.Contains(t, args, "8000:8000/tcp")
+	require.Contains(t, args, "9000:9090/udp")
+}
+
 func TestChooseImagePrecedence(t *testing.T) {
 	img, src := chooseImage("base", "cli-override", "apply-override")
 	require.Equal(t, "cli-override", img)
