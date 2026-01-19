@@ -798,6 +798,28 @@ main() {
   generate_dnsmasq_allowlist "$ALLOWLIST_FILE" "$DNS_ALLOW_FILE"
 
   if [ "$IS_ROOT" -eq 1 ]; then
+    debug "ensuring user-writable /dev and /tmp directories"
+    
+    # Make /dev writable for all users so they can use tee /dev/stderr, etc.
+    if [ -d /dev ]; then
+      chmod 777 /dev 2>/dev/null || debug "could not chmod /dev to 777"
+      # Make /dev/pts and /dev/ptmx writable for all users to support tee /dev/stderr
+      if [ -d /dev/pts ]; then
+        chmod 777 /dev/pts 2>/dev/null || debug "could not chmod /dev/pts"
+        chmod 666 /dev/pts/* 2>/dev/null || debug "could not chmod /dev/pts/* files"
+      fi
+      if [ -e /dev/ptmx ]; then
+        chmod 666 /dev/ptmx 2>/dev/null || debug "could not chmod /dev/ptmx"
+      fi
+    fi
+    
+    # Ensure /tmp and other temporary areas are writable
+    for dir in /tmp /run /var/tmp; do
+      if [ -d "$dir" ]; then
+        mount -o remount,rw "$dir" 2>/dev/null || debug "$dir remount failed or already writable"
+      fi
+    done
+
     debug "ensuring log directories"
     mkdir -p "$SHAI_LOG_DIR" "$TINYPROXY_LOG_DIR" "$DNSMASQ_LOG_DIR"
     mkdir -p /etc/supervisor/conf.d
