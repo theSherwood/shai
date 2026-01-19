@@ -124,6 +124,53 @@ resources:
         port: 6379
 
   # --------------------------------------------------------------------------
+  # HTTP Server
+  # --------------------------------------------------------------------------
+  # For web services that expose HTTP ports
+  http-server:
+    expose:
+      # Simple format: same port on host and container, tcp protocol
+      - 8000
+      - 3000
+      - 5000
+
+  # --------------------------------------------------------------------------
+  # API Services
+  # --------------------------------------------------------------------------
+  # For APIs with custom port mapping
+  api-service:
+    expose:
+      # Web server on port 8080 inside container, 8000 on host
+      - host: 8000
+        container: 8080
+        protocol: tcp
+
+      # API server on port 3001 inside container, 3001 on host
+      - host: 3001
+        container: 3001
+        protocol: tcp
+
+  # --------------------------------------------------------------------------
+  # UDP Services
+  # --------------------------------------------------------------------------
+  # For services using UDP (DNS, game servers, etc.)
+  udp-service:
+    expose:
+      # DNS resolver on port 53
+      - host: 53
+        container: 53
+        protocol: udp
+
+      # Game server with both TCP and UDP
+      - host: 7777
+        container: 7777
+        protocol: tcp
+
+      - host: 7777
+        container: 7777
+        protocol: udp
+
+  # --------------------------------------------------------------------------
   # ML/AI Development
   # --------------------------------------------------------------------------
   # Resources for machine learning workflows
@@ -406,6 +453,80 @@ shai -rw firmware
 # Can call: flash-device remote command
 # Has access to USB devices
 ```
+
+### HTTP Server Development
+
+```bash
+# Run a web server
+shai -rw packages/web-app --resource-set http-server
+
+# Automatic resources: base-allowlist, git-ssh, frontend-dev, http-server
+# Container ports 8000, 3000, 5000 exposed to host
+# Access from host: http://localhost:8000
+```
+
+### API Service Development
+
+```bash
+# Run backend API service
+shai -rw services/api --resource-set api-service
+
+# Automatic resources: base-allowlist, git-ssh, backend-dev, database-access, api-service
+# Container port 8080 exposed as localhost:8000
+# Container port 3001 exposed as localhost:3001
+# Can access both from: http://localhost:8000 and http://localhost:3001
+```
+
+### UDP Service Development
+
+```bash
+# Run DNS resolver or game server
+shai -rw services/game-server --resource-set udp-service
+
+# Automatic resources: base-allowlist, git-ssh, udp-service
+# Container UDP port 53 exposed as localhost:53
+# Container UDP/TCP port 7777 exposed as localhost:7777
+# Accessible from host via localhost on same ports
+```
+
+## Port Mapping Explanation
+
+### Host vs Container Ports
+
+When you expose a port in Shai, you're mapping a port from inside the container to a port on your host machine.
+
+**Simple Format (same port for host and container):**
+```yaml
+expose:
+  - 8000  # Accessible at localhost:8000 on host
+```
+The container process binds to port 8000 inside the container, and it's accessible at `localhost:8000` on your host.
+
+**Advanced Format (different host and container ports):**
+```yaml
+expose:
+  - host: 8000
+    container: 8080
+    protocol: tcp
+```
+The container process binds to port 8080 inside the container, but you access it at `localhost:8000` on your host. This is useful when your container process uses a standard port (like 8080) but you want to expose it differently on your host.
+
+**Protocol Types:**
+- `tcp` (default): For HTTP, HTTPS, APIs, and other TCP-based services
+- `udp`: For DNS, game servers, streaming services, or other UDP-based protocols
+
+### Port Display During Startup
+
+When you start a sandbox with exposed ports, Shai displays them in the output:
+
+```
+Exposed Ports:
+  localhost:8000 (tcp) → container:8080
+  localhost:3001 (tcp) → container:3001
+  localhost:53 (udp) → container:53
+```
+
+This shows which localhost ports you can access to reach services running inside the container.
 
 ## Customization
 
