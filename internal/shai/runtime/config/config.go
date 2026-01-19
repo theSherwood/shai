@@ -287,6 +287,8 @@ func (c *Config) validate() error {
 				res.Calls[i].allowedRx = rx
 			}
 		}
+		// Track seen host ports within this resource (keyed by host:protocol)
+		seenPorts := make(map[string]int)
 		for i, exp := range res.Expose {
 			if exp.Host < 1 || exp.Host > 65535 {
 				return fmt.Errorf("resource %s expose[%d] has invalid host port %d (must be 1-65535)", name, i, exp.Host)
@@ -299,6 +301,12 @@ func (c *Config) validate() error {
 				return fmt.Errorf("resource %s expose[%d] has invalid protocol %q (must be tcp or udp)", name, i, exp.Protocol)
 			}
 			res.Expose[i].Protocol = protocol
+			// Check for duplicate host port within this resource
+			portKey := fmt.Sprintf("%d/%s", exp.Host, protocol)
+			if prevIdx, exists := seenPorts[portKey]; exists {
+				return fmt.Errorf("resource %s has duplicate host port %d/%s (expose[%d] and expose[%d])", name, exp.Host, protocol, prevIdx, i)
+			}
+			seenPorts[portKey] = i
 		}
 	}
 	if len(c.Apply) == 0 {
@@ -341,6 +349,20 @@ func (c *Config) resolvePaths() error {
 					return fmt.Errorf("call %q defined in both resources %s and %s for path %s", call.Name, other, res.Name, pr.Path)
 				}
 				seen[call.Name] = res.Name
+			}
+		}
+	}
+
+	// Validate exposed port uniqueness per path (keyed by host:protocol).
+	for _, pr := range resolved {
+		seen := map[string]string{} // portKey -> resource name
+		for _, res := range pr.Resources {
+			for _, exp := range res.Spec.Expose {
+				portKey := fmt.Sprintf("%d/%s", exp.Host, exp.Protocol)
+				if other, exists := seen[portKey]; exists {
+					return fmt.Errorf("host port %d/%s exposed in both resources %s and %s for path %s", exp.Host, exp.Protocol, other, res.Name, pr.Path)
+				}
+				seen[portKey] = res.Name
 			}
 		}
 	}

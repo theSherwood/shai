@@ -405,3 +405,100 @@ apply:
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid host port 0")
 }
+
+func TestExposedPortDuplicateWithinResource(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: example
+resources:
+  web:
+    expose:
+      - 8000
+      - 8000
+apply:
+  - path: ./
+    resources: [web]
+`)
+
+	_, err := Load(path, map[string]string{}, map[string]string{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate host port 8000/tcp")
+}
+
+func TestExposedPortDuplicateAcrossResources(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: example
+resources:
+  web:
+    expose:
+      - 8000
+  api:
+    expose:
+      - 8000
+apply:
+  - path: ./
+    resources:
+      - web
+      - api
+`)
+
+	_, err := Load(path, map[string]string{}, map[string]string{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "host port 8000/tcp exposed in both")
+}
+
+func TestExposedPortSamePortDifferentProtocol(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: example
+resources:
+  web:
+    expose:
+      - host: 8000
+        protocol: tcp
+      - host: 8000
+        protocol: udp
+apply:
+  - path: ./
+    resources: [web]
+`)
+
+	cfg, err := Load(path, map[string]string{}, map[string]string{})
+	require.NoError(t, err)
+
+	res := cfg.Resources["web"]
+	require.NotNil(t, res)
+	require.Len(t, res.Expose, 2)
+	assert.Equal(t, "tcp", res.Expose[0].Protocol)
+	assert.Equal(t, "udp", res.Expose[1].Protocol)
+}
+
+func TestExposedPortDifferentContainerSameHost(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: example
+resources:
+  web:
+    expose:
+      - host: 8000
+        container: 3000
+      - host: 8000
+        container: 4000
+apply:
+  - path: ./
+    resources: [web]
+`)
+
+	_, err := Load(path, map[string]string{}, map[string]string{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate host port 8000/tcp")
+}
