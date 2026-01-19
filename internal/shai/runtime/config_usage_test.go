@@ -156,6 +156,73 @@ apply:
 	assert.Equal(t, "bar-image", image)
 }
 
+func TestResolvedResourcesWithExposedPorts(t *testing.T) {
+	cfg := loadTestConfig(t, `
+type: shai-sandbox
+version: 1
+image: example
+user: dev
+workspace: /src
+resources:
+  web:
+    expose:
+      - 8000
+      - 8443
+  api:
+    expose:
+      - host: 3000
+        container: 3000
+        protocol: tcp
+  database:
+    expose:
+      - host: 5432
+        container: 5432
+apply:
+  - path: ./
+    resources: [web]
+  - path: ./services
+    resources: [web, api]
+`)
+
+	// Test ports from apply rules at root path
+	resources, names, _, err := resolvedResources(cfg, []string{"."}, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"web"}, names)
+	require.Len(t, resources, 1)
+
+	ports := collectExposedPorts(resources)
+	require.Len(t, ports, 2) // 8000, 8443
+	require.Equal(t, 8000, ports[0].Host)
+	require.Equal(t, 8443, ports[1].Host)
+
+	// Test ports from apply rules at subpath (combines web + api)
+	resources, names, _, err = resolvedResources(cfg, []string{"services"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"web", "api"}, names)
+	require.Len(t, resources, 2)
+
+	ports = collectExposedPorts(resources)
+	require.Len(t, ports, 3) // 8000, 8443, 3000
+
+	// Test CLI --resource-set flag adds extra ports
+	resources, names, _, err = resolvedResources(cfg, []string{"."}, []string{"database"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"database", "web"}, names)
+	require.Len(t, resources, 2)
+
+	ports = collectExposedPorts(resources)
+	require.Len(t, ports, 3) // 5432, 8000, 8443
+
+	// Test CLI --resource-set overrides order (CLI first, then apply rules)
+	resources, names, _, err = resolvedResources(cfg, []string{"services"}, []string{"database", "api"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"database", "api", "web"}, names) // CLI first, then apply
+	require.Len(t, resources, 3)
+
+	ports = collectExposedPorts(resources)
+	require.Len(t, ports, 4) // 5432, 3000, 8000, 8443
+}
+
 func loadTestConfig(t *testing.T, contents string) *config.Config {
 	t.Helper()
 	dir := t.TempDir()
